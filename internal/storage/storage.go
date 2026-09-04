@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/rizalta/stash/internal/crypto"
@@ -26,12 +27,12 @@ type EntryRecord struct {
 func LoadVaultFile(path string) (*VaultFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("storage: reading vault file: %w", err)
 	}
 
 	var vf VaultFile
 	if err := json.Unmarshal(data, &vf); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("storage: parsing vault file: %w", err)
 	}
 
 	return &vf, nil
@@ -40,13 +41,17 @@ func LoadVaultFile(path string) (*VaultFile, error) {
 func SaveVaultFile(path string, vf *VaultFile) error {
 	data, err := json.MarshalIndent(vf, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("storage: encoding vault file: %w", err)
 	}
 
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+		return fmt.Errorf("storage: writing vault file: %w", err)
 	}
 
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("storage: renaming vault file: %w", err)
+	}
+
+	return nil
 }
