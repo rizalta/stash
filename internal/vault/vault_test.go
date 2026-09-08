@@ -15,7 +15,6 @@ func TestCreateAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create vault: %v", err)
 	}
-	_ = v
 
 	opened, err := Open(path, password)
 	if err != nil {

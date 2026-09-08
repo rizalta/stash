@@ -19,6 +19,7 @@ type VaultFile struct {
 
 type EntryRecord struct {
 	ID         string `json:"id"`
+	Title      string `json:"title"`
 	Ciphertext []byte `json:"ciphertext"`
 	ModifiedAt int64  `json:"modified_at"`
 	Deleted    bool   `json:"deleted"`
