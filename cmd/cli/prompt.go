@@ -1,13 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/rizalta/stash/internal/vault"
 	"golang.org/x/term"
 )
+
+var stdinReader = bufio.NewReader(os.Stdin)
 
 var ErrPasswordMismatch = errors.New("passwords do not match")
 
@@ -38,4 +43,31 @@ func promptNewPassword() ([]byte, error) {
 	}
 
 	return password, nil
+}
+
+func openVaultFromPrompt() (*vault.Vault, error) {
+	password, err := promptPassword("master password: ")
+	if err != nil {
+		return nil, err
+	}
+
+	v, err := vault.Open(vaultPath, password)
+	if err != nil {
+		if errors.Is(err, vault.ErrWrongPassword) {
+			return nil, errors.New("incorrect password")
+		}
+		return nil, fmt.Errorf("opening vault: %w", err)
+	}
+
+	return v, nil
+}
+
+func promptField(prompt string) (string, error) {
+	fmt.Print(prompt)
+	val, err := stdinReader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("reading field: %w", err)
+	}
+
+	return strings.TrimSpace(val), nil
 }
