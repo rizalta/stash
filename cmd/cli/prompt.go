@@ -58,6 +58,7 @@ func openVaultFromPrompt() (*vault.Vault, error) {
 		}
 		return nil, fmt.Errorf("opening vault: %w", err)
 	}
+	fmt.Println()
 
 	return v, nil
 }
@@ -70,4 +71,17 @@ func promptField(prompt string) (string, error) {
 	}
 
 	return strings.TrimSpace(val), nil
+}
+
+func promptFieldWithDefault(prompt string, current string) (string, error) {
+	val, err := promptField(fmt.Sprintf("%s [%s]: ", prompt, current))
+	if err != nil {
+		return "", err
+	}
+
+	if val == "" {
+		return current, nil
+	}
+
+	return val, nil
 }

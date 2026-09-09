@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -10,18 +10,21 @@ import (
 
 var vaultPath string
 
+var ErrSecretNotFound = errors.New("secret not found")
+
 var rootCmd = &cobra.Command{
-	Use:   "stash",
-	Short: "a simple secrets manager",
+	Use:          "stash",
+	Short:        "a simple secrets manager",
+	SilenceUsage: true,
 }
 
 func init() {
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.PersistentFlags().StringVarP(&vaultPath, "vault", "v", defaultValuePath(), "path to vault file")
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
