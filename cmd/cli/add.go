@@ -36,16 +36,22 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
+		notes, err := promptField("notes: ")
+		if err != nil {
+			return err
+		}
+
 		e := vault.Entry{
 			Title:    title,
 			URL:      url,
 			Username: username,
 			Password: password,
+			Notes:    notes,
 		}
 
 		id, err := v.Add(e)
 		if err != nil {
-			return fmt.Errorf("adding entry: %w", err)
+			return fmt.Errorf("adding secret: %w", err)
 		}
 
 		fmt.Printf("added secret id: %s\n", id)
