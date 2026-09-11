@@ -166,12 +166,17 @@ func (q *Queries) ListEntries(ctx context.Context) ([]ListEntriesRow, error) {
 
 const setDeleted = `-- name: SetDeleted :exec
 UPDATE entries
-SET deleted = 1
+SET deleted = 1, modified_at = ?
 WHERE id = ? AND deleted = 0
 `
 
-func (q *Queries) SetDeleted(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, setDeleted, id)
+type SetDeletedParams struct {
+	ModifiedAt int64
+	ID         string
+}
+
+func (q *Queries) SetDeleted(ctx context.Context, arg SetDeletedParams) error {
+	_, err := q.db.ExecContext(ctx, setDeleted, arg.ModifiedAt, arg.ID)
 	return err
 }
 

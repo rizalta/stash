@@ -38,7 +38,7 @@ WHERE id = ? AND deleted = 0;
 
 -- name: SetDeleted :exec
 UPDATE entries
-SET deleted = 1
+SET deleted = 1, modified_at = ?
 WHERE id = ? AND deleted = 0;
 
 -- name: EntryExists :one
