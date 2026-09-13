@@ -5,9 +5,9 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
+	"github.com/rizalta/stash/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
-	rootCmd.PersistentFlags().StringVarP(&vaultPath, "vault", "v", defaultVaultPath(), "path to vault file")
+	rootCmd.PersistentFlags().StringVarP(&vaultPath, "vault", "v", vault.DefaultPath(), "path to vault file")
 }
 
 func Execute() {
@@ -33,14 +33,4 @@ func Execute() {
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
-}
-
-func defaultVaultPath() string {
-	path := filepath.Join(".stash", "vault.db")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-
-	return filepath.Join(home, path)
 }

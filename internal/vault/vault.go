@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -224,4 +225,14 @@ func (v *Vault) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+func DefaultPath() string {
+	path := filepath.Join(".stash", "vault.db")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+
+	return filepath.Join(home, path)
 }
