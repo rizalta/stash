@@ -1,7 +1,7 @@
 package vault
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -10,40 +10,41 @@ import (
 
 var password = []byte("correct-password")
 
-func newTestVault(t *testing.T) *Vault {
-	path := filepath.Join(t.TempDir(), "vault.json")
+func newTestVault(t *testing.T) (*Vault, string) {
+	path := filepath.Join(t.TempDir(), "vault.db")
+	ctx := context.Background()
 
-	v, err := Create(path, password)
+	err := Create(ctx, path, password)
 	if err != nil {
 		t.Fatalf("failed to create vault: %v", err)
 	}
 
-	return v
+	v, err := Open(ctx, path, password)
+	if err != nil {
+		t.Fatalf("failed to open vault: %v", err)
+	}
+
+	t.Cleanup(func() { _ = v.Close() })
+
+	return v, path
 }
 
 func TestCreateAndOpen(t *testing.T) {
-	v := newTestVault(t)
-	path := v.path
+	_, path := newTestVault(t)
+	ctx := context.Background()
 
-	opened, err := Open(path, password)
-	if err != nil {
-		t.Fatalf("failed to open vault with correct password: %v", err)
-	}
-	if !bytes.Equal(opened.dek, v.dek) {
-		t.Error("dek mismatch between create and open")
-	}
-
-	if _, err := Open(path, []byte("wrong-password")); !errors.Is(err, ErrWrongPassword) {
+	if _, err := Open(ctx, path, []byte("wrong-password")); !errors.Is(err, ErrWrongPassword) {
 		t.Errorf("expected ErrWrongPassword, got %v", err)
 	}
 
-	if _, err := Create(path, password); !errors.Is(err, ErrVaultExists) {
+	if err := Create(ctx, path, password); !errors.Is(err, ErrVaultExists) {
 		t.Errorf("expected ErrVaultExists, got %v", err)
 	}
 }
 
 func TestAddReopen(t *testing.T) {
-	v := newTestVault(t)
+	v, path := newTestVault(t)
+	ctx := context.Background()
 
 	e := Entry{
 		Title:    "Test",
@@ -52,18 +53,18 @@ func TestAddReopen(t *testing.T) {
 		URL:      "https://test.com",
 	}
 
-	id, err := v.Add(e)
+	id, err := v.Add(ctx, e)
 	if err != nil {
 		t.Fatalf("failed to add entry: %v", err)
 	}
 
-	path := v.path
-	opened, err := Open(path, password)
+	opened, err := Open(ctx, path, password)
 	if err != nil {
-		t.Fatalf("failed to open vault with correct password: %v", err)
+		t.Fatalf("failed to reopen the vault: %v", err)
 	}
+	defer func() { _ = opened.Close() }()
 
-	re, err := opened.Get(id)
+	re, err := opened.Get(ctx, id)
 	if err != nil {
 		t.Fatalf("failed to retrieve entry from opened vault: %v", err)
 	}
@@ -74,7 +75,8 @@ func TestAddReopen(t *testing.T) {
 }
 
 func TestUpdateGet(t *testing.T) {
-	v := newTestVault(t)
+	v, _ := newTestVault(t)
+	ctx := context.Background()
 
 	e := Entry{
 		Title:    "Test",
@@ -83,18 +85,18 @@ func TestUpdateGet(t *testing.T) {
 		URL:      "https://test.com",
 	}
 
-	id, err := v.Add(e)
+	id, err := v.Add(ctx, e)
 	if err != nil {
 		t.Fatalf("failed to add entry: %v", err)
 	}
 
 	e.Password = "updated_user_password"
 
-	if err := v.Update(id, e); err != nil {
+	if err := v.Update(ctx, id, e); err != nil {
 		t.Fatalf("failed to update entry: %v", err)
 	}
 
-	re, err := v.Get(id)
+	re, err := v.Get(ctx, id)
 	if err != nil {
 		t.Fatalf("failed to retrieve entry from vault: %v", err)
 	}
@@ -103,14 +105,18 @@ func TestUpdateGet(t *testing.T) {
 		t.Fatalf("retrieved entry is not same as the updated")
 	}
 
-	entries := v.List()
+	entries, err := v.List(ctx)
+	if err != nil {
+		t.Fatalf("failed to list entries: %v", err)
+	}
 	if len(entries) != 1 {
 		t.Errorf("expected num of entries 1, got %d", len(entries))
 	}
 }
 
 func TestDeleteGet(t *testing.T) {
-	v := newTestVault(t)
+	v, _ := newTestVault(t)
+	ctx := context.Background()
 
 	e := Entry{
 		Title:    "Test",
@@ -119,22 +125,57 @@ func TestDeleteGet(t *testing.T) {
 		URL:      "https://test.com",
 	}
 
-	id, err := v.Add(e)
+	id, err := v.Add(ctx, e)
 	if err != nil {
 		t.Fatalf("failed to add entry: %v", err)
 	}
 
-	if err := v.Delete(id); err != nil {
+	if err := v.Delete(ctx, id); err != nil {
 		t.Fatalf("failed to delete entry: %v", err)
 	}
 
-	if _, err := v.Get(id); !errors.Is(err, ErrEntryNotFound) {
+	if _, err := v.Get(ctx, id); !errors.Is(err, ErrEntryNotFound) {
 		t.Fatalf("expected error %v, got %v", ErrEntryNotFound, err)
 	}
 
-	entries := v.List()
+	entries, err := v.List(ctx)
+	if err != nil {
+		t.Fatalf("failed to list entries: %v", err)
+	}
 
 	if len(entries) != 0 {
 		t.Errorf("expected 0 entries, got %d", len(entries))
+	}
+}
+
+func TestList(t *testing.T) {
+	v, _ := newTestVault(t)
+	ctx := context.Background()
+
+	entries := []Entry{
+		{Title: "aaa", Username: "user-1", Password: "password-1", URL: "https://aaa.com", Notes: "note-1"},
+		{Title: "bbb", Username: "user-2", Password: "password-2", URL: "https://bbb.com", Notes: "note-2"},
+		{Title: "ccc", Username: "user-3", Password: "password-3", URL: "https://ccc.com", Notes: "note-3"},
+	}
+
+	for _, e := range entries {
+		if _, err := v.Add(ctx, e); err != nil {
+			t.Fatalf("failed to add entry: %v", err)
+		}
+	}
+
+	listed, err := v.List(ctx)
+	if err != nil {
+		t.Fatalf("failed to list entries: %v", err)
+	}
+
+	if len(listed) != len(entries) {
+		t.Errorf("expected %d entries, got %d", len(entries), len(listed))
+	}
+
+	for i, em := range listed {
+		if em.Title != entries[i].Title {
+			t.Errorf("entry %d title mismatch: expected %s, got %s", i, entries[i].Title, em.Title)
+		}
 	}
 }
