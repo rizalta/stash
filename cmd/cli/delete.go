@@ -13,14 +13,16 @@ var deleteCmd = &cobra.Command{
 	Short: "delete secret from vault",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		id := args[0]
 
-		v, err := openVaultFromPrompt()
+		v, err := openVaultFromPrompt(ctx)
 		if err != nil {
 			return err
 		}
+		defer func() { _ = v.Close() }()
 
-		if err := v.Delete(id); err != nil {
+		if err := v.Delete(ctx, id); err != nil {
 			if errors.Is(err, vault.ErrEntryNotFound) {
 				return ErrSecretNotFound
 			}

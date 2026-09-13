@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -45,13 +46,13 @@ func promptNewPassword() ([]byte, error) {
 	return password, nil
 }
 
-func openVaultFromPrompt() (*vault.Vault, error) {
+func openVaultFromPrompt(ctx context.Context) (*vault.Vault, error) {
 	password, err := promptPassword("master password: ")
 	if err != nil {
 		return nil, err
 	}
 
-	v, err := vault.Open(vaultPath, password)
+	v, err := vault.Open(ctx, vaultPath, password)
 	if err != nil {
 		if errors.Is(err, vault.ErrWrongPassword) {
 			return nil, errors.New("incorrect password")

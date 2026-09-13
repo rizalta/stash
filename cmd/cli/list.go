@@ -12,12 +12,18 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list all secrets",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		v, err := openVaultFromPrompt()
+		ctx := cmd.Context()
+
+		v, err := openVaultFromPrompt(ctx)
 		if err != nil {
 			return err
 		}
+		defer func() { _ = v.Close() }()
 
-		entries := v.List()
+		entries, err := v.List(ctx)
+		if err != nil {
+			return fmt.Errorf("listing secrets: %w", err)
+		}
 
 		if len(entries) == 0 {
 			fmt.Println("no secrets stored")

@@ -13,14 +13,16 @@ var updateCmd = &cobra.Command{
 	Short: "update secret on vault",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		id := args[0]
 
-		v, err := openVaultFromPrompt()
+		v, err := openVaultFromPrompt(ctx)
 		if err != nil {
 			return err
 		}
+		defer func() { _ = v.Close() }()
 
-		e, err := v.Get(id)
+		e, err := v.Get(ctx, id)
 		if err != nil {
 			if errors.Is(err, vault.ErrEntryNotFound) {
 				return ErrSecretNotFound
@@ -65,7 +67,7 @@ var updateCmd = &cobra.Command{
 			Notes:    notes,
 		}
 
-		if err := v.Update(id, ue); err != nil {
+		if err := v.Update(ctx, id, ue); err != nil {
 			return fmt.Errorf("updating secret: %w", err)
 		}
 

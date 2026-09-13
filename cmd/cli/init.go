@@ -13,6 +13,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "create a new vault",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		dir := filepath.Dir(vaultPath)
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("creating vault directory: %w", err)
@@ -23,7 +24,7 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := vault.Create(vaultPath, password); err != nil {
+		if err := vault.Create(ctx, vaultPath, password); err != nil {
 			return fmt.Errorf("creating vault: %w", err)
 		}
 

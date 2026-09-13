@@ -11,10 +11,13 @@ var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "add secret to vault",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		v, err := openVaultFromPrompt()
+		ctx := cmd.Context()
+
+		v, err := openVaultFromPrompt(ctx)
 		if err != nil {
 			return err
 		}
+		defer func() { _ = v.Close() }()
 
 		title, err := promptField("title: ")
 		if err != nil {
@@ -49,7 +52,7 @@ var addCmd = &cobra.Command{
 			Notes:    notes,
 		}
 
-		id, err := v.Add(e)
+		id, err := v.Add(ctx, e)
 		if err != nil {
 			return fmt.Errorf("adding secret: %w", err)
 		}
