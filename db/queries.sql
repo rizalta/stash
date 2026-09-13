@@ -29,7 +29,7 @@ VALUES (?, ?, ?, ?, 0);
 SELECT * FROM entries WHERE id = ? AND deleted = 0;
 
 -- name: ListEntries :many
-SELECT id, title, modified_at FROM entries WHERE deleted = 0;
+SELECT id, title, modified_at FROM entries WHERE deleted = 0 ORDER BY title;
 
 -- name: UpdateEntry :execrows
 UPDATE entries

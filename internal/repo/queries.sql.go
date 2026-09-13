@@ -132,7 +132,7 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error 
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, title, modified_at FROM entries WHERE deleted = 0
+SELECT id, title, modified_at FROM entries WHERE deleted = 0 ORDER BY title
 `
 
 type ListEntriesRow struct {
