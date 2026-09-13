@@ -31,26 +31,19 @@ type Entry struct {
 	Notes    string `json:"notes"`
 }
 
-type EntryMeta struct {
-	ID         string
-	Title      string
-	ModifiedAt int64
-}
-
 type Vault struct {
-	path    string
 	dek     []byte
 	storage *storage.Storage
 }
 
-func Create(path string, password []byte) (*Vault, error) {
+func Create(ctx context.Context, path string, password []byte) error {
 	if _, err := os.Stat(path); err == nil {
-		return nil, ErrVaultExists
+		return ErrVaultExists
 	}
 
 	salt, err := crypto.GenerateSalt()
 	if err != nil {
-		return nil, fmt.Errorf("vault: generating salt: %w", err)
+		return fmt.Errorf("vault: generating salt: %w", err)
 	}
 
 	kdfParams := crypto.DefaultKDFParams()
@@ -58,17 +51,17 @@ func Create(path string, password []byte) (*Vault, error) {
 
 	dek := make([]byte, 32)
 	if _, err := rand.Read(dek); err != nil {
-		return nil, fmt.Errorf("vault: generating dek: %w", err)
+		return fmt.Errorf("vault: generating dek: %w", err)
 	}
 
 	encryptedDek, err := crypto.Encrypt(kek, dek)
 	if err != nil {
-		return nil, fmt.Errorf("vault: encrypting dek: %w", err)
+		return fmt.Errorf("vault: encrypting dek: %w", err)
 	}
 
 	verifier, err := crypto.Encrypt(dek, []byte(verifierStr))
 	if err != nil {
-		return nil, fmt.Errorf("vault: encrypting verifier: %w", err)
+		return fmt.Errorf("vault: encrypting verifier: %w", err)
 	}
 
 	h := storage.Header{
@@ -81,34 +74,42 @@ func Create(path string, password []byte) (*Vault, error) {
 
 	s, err := storage.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("vault: opening storage: %w", err)
+		return fmt.Errorf("vault: opening storage: %w", err)
 	}
-	if err := s.Init(context.Background(), h); err != nil {
-		return nil, fmt.Errorf("vault: initializing vault: %w", err)
-	}
-
-	v := &Vault{
-		path:    path,
-		dek:     dek,
-		storage: s,
+	if err := s.Init(ctx, h); err != nil {
+		return fmt.Errorf("vault: initializing vault: %w", err)
 	}
 
-	return v, nil
+	if err := s.Close(); err != nil {
+		return fmt.Errorf("vault: closing storage: %w", err)
+	}
+
+	return nil
 }
 
-func Open(path string, password []byte) (*Vault, error) {
-	vf, err := storage.LoadVaultFile(path)
+func Open(ctx context.Context, path string, password []byte) (v *Vault, err error) {
+	s, err := storage.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("vault: loading vault file: %w", err)
+		return nil, fmt.Errorf("vault: loading storage: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = s.Close()
+		}
+	}()
+
+	h, err := s.LoadHeader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("vault: loading header: %w", err)
 	}
 
-	kek := crypto.DeriveKey(password, vf.KDFSalt, vf.KDFParams)
-	dek, err := crypto.Decrypt(kek, vf.EncryptedDEK)
+	kek := crypto.DeriveKey(password, h.KDFSalt, h.KDFParams)
+	dek, err := crypto.Decrypt(kek, h.EncryptedDEK)
 	if err != nil {
 		return nil, ErrWrongPassword
 	}
 
-	verifier, err := crypto.Decrypt(dek, vf.Verifier)
+	verifier, err := crypto.Decrypt(dek, h.Verifier)
 	if err != nil {
 		return nil, ErrWrongPassword
 	}
@@ -117,15 +118,17 @@ func Open(path string, password []byte) (*Vault, error) {
 		return nil, ErrWrongPassword
 	}
 
-	v := &Vault{
-		path: path,
-		dek:  dek,
-		file: vf,
-	}
-	return v, nil
+	return &Vault{
+		dek:     dek,
+		storage: s,
+	}, nil
 }
 
-func (v *Vault) Add(e Entry) (string, error) {
+func (v *Vault) Close() error {
+	return v.storage.Close()
+}
+
+func (v *Vault) Add(ctx context.Context, e Entry) (string, error) {
 	data, err := json.MarshalIndent(e, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("vault: encoding entry: %w", err)
@@ -145,73 +148,45 @@ func (v *Vault) Add(e Entry) (string, error) {
 		Deleted:    false,
 	}
 
-	newEntries := append(v.file.Entries, record)
-	tempFile := *v.file
-	tempFile.Entries = newEntries
-
-	if err := storage.SaveVaultFile(v.path, &tempFile); err != nil {
-		return "", fmt.Errorf("vault: saving vault file: %w", err)
+	if err := v.storage.AddEntry(ctx, record); err != nil {
+		return "", fmt.Errorf("vault: adding entry: %w", err)
 	}
-
-	v.file.Entries = newEntries
 
 	return id, nil
 }
 
-func (v *Vault) Get(id string) (Entry, error) {
-	for _, er := range v.file.Entries {
-		if er.ID == id {
-			if er.Deleted {
-				return Entry{}, ErrEntryNotFound
-			}
-
-			data, err := crypto.Decrypt(v.dek, er.Ciphertext)
-			if err != nil {
-				return Entry{}, fmt.Errorf("%w: %w", ErrCorruptEntry, err)
-			}
-
-			e := Entry{}
-			if err := json.Unmarshal(data, &e); err != nil {
-				return Entry{}, fmt.Errorf("%w: %w", ErrCorruptEntry, err)
-			}
-
-			return e, nil
+func (v *Vault) Get(ctx context.Context, id string) (Entry, error) {
+	record, err := v.storage.GetEntry(ctx, id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return Entry{}, ErrEntryNotFound
 		}
+		return Entry{}, fmt.Errorf("vault: getting entry: %w", err)
 	}
 
-	return Entry{}, ErrEntryNotFound
+	data, err := crypto.Decrypt(v.dek, record.Ciphertext)
+	if err != nil {
+		return Entry{}, fmt.Errorf("%w: %w", ErrCorruptEntry, err)
+	}
+
+	e := Entry{}
+	if err := json.Unmarshal(data, &e); err != nil {
+		return Entry{}, fmt.Errorf("%w: %w", ErrCorruptEntry, err)
+	}
+
+	return e, nil
 }
 
-func (v *Vault) List() []EntryMeta {
-	ret := []EntryMeta{}
-	for _, er := range v.file.Entries {
-		if !er.Deleted {
-			ret = append(ret, EntryMeta{
-				ID:         er.ID,
-				Title:      er.Title,
-				ModifiedAt: er.ModifiedAt,
-			})
-		}
+func (v *Vault) List(ctx context.Context) ([]storage.EntryMeta, error) {
+	entries, err := v.storage.ListEntries(ctx)
+	if err != nil {
+		return []storage.EntryMeta{}, fmt.Errorf("vault: listing entries: %w", err)
 	}
 
-	return ret
+	return entries, nil
 }
 
-func (v *Vault) Update(id string, e Entry) error {
-	idx := -1
-	for i, er := range v.file.Entries {
-		if er.ID == id {
-			if !er.Deleted {
-				idx = i
-			}
-			break
-		}
-	}
-
-	if idx == -1 {
-		return ErrEntryNotFound
-	}
-
+func (v *Vault) Update(ctx context.Context, id string, e Entry) error {
 	data, err := json.MarshalIndent(e, "", "  ")
 	if err != nil {
 		return fmt.Errorf("vault: encoding entry: %w", err)
@@ -230,53 +205,23 @@ func (v *Vault) Update(id string, e Entry) error {
 		Deleted:    false,
 	}
 
-	newEntries := make([]storage.EntryRecord, len(v.file.Entries))
-	copy(newEntries, v.file.Entries)
-	newEntries[idx] = record
-
-	tempFile := *v.file
-	tempFile.Entries = newEntries
-
-	if err := storage.SaveVaultFile(v.path, &tempFile); err != nil {
-		return fmt.Errorf("vault: saving vault file: %w", err)
+	if err := v.storage.UpdateEntry(ctx, record); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return ErrEntryNotFound
+		}
+		return fmt.Errorf("vault: updating entry: %w", err)
 	}
-
-	v.file.Entries = newEntries
 
 	return nil
 }
 
-func (v *Vault) Delete(id string) error {
-	idx := -1
-	for i, er := range v.file.Entries {
-		if er.ID == id {
-			if !er.Deleted {
-				idx = i
-			}
-			break
+func (v *Vault) Delete(ctx context.Context, id string) error {
+	if err := v.storage.SetDeleted(ctx, id, time.Now().Unix()); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return ErrEntryNotFound
 		}
+		return fmt.Errorf("vault: deleting an entry: %w", err)
 	}
-
-	if idx == -1 {
-		return ErrEntryNotFound
-	}
-
-	record := v.file.Entries[idx]
-	record.Deleted = true
-	record.ModifiedAt = time.Now().Unix()
-
-	newEntries := make([]storage.EntryRecord, len(v.file.Entries))
-	copy(newEntries, v.file.Entries)
-	newEntries[idx] = record
-
-	tempFile := *v.file
-	tempFile.Entries = newEntries
-
-	if err := storage.SaveVaultFile(v.path, &tempFile); err != nil {
-		return fmt.Errorf("vault: saving vault file: %w", err)
-	}
-
-	v.file.Entries = newEntries
 
 	return nil
 }

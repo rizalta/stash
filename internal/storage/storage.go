@@ -51,6 +51,12 @@ type EntryRecord struct {
 	Deleted    bool
 }
 
+type EntryMeta struct {
+	ID         string
+	Title      string
+	ModifiedAt int64
+}
+
 func (s *Storage) Init(ctx context.Context, h Header) error {
 	if _, err := s.conn.ExecContext(ctx, db.Schema); err != nil {
 		return fmt.Errorf("storage: creating schema: %w", err)
@@ -127,12 +133,6 @@ func (s *Storage) GetEntry(ctx context.Context, id string) (EntryRecord, error) 
 		ModifiedAt: row.ModifiedAt,
 		Deleted:    row.Deleted != 0,
 	}, nil
-}
-
-type EntryMeta struct {
-	ID         string
-	Title      string
-	ModifiedAt int64
 }
 
 func (s *Storage) ListEntries(ctx context.Context) ([]EntryMeta, error) {
