@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -37,9 +38,9 @@ type EntryMeta struct {
 }
 
 type Vault struct {
-	path string
-	dek  []byte
-	file *storage.VaultFile
+	path    string
+	dek     []byte
+	storage *storage.Storage
 }
 
 func Create(path string, password []byte) (*Vault, error) {
@@ -70,23 +71,26 @@ func Create(path string, password []byte) (*Vault, error) {
 		return nil, fmt.Errorf("vault: encrypting verifier: %w", err)
 	}
 
-	vf := &storage.VaultFile{
+	h := storage.Header{
 		Version:      1,
 		KDFSalt:      salt,
 		KDFParams:    kdfParams,
 		EncryptedDEK: encryptedDek,
 		Verifier:     verifier,
-		Entries:      []storage.EntryRecord{},
 	}
 
-	if err := storage.SaveVaultFile(path, vf); err != nil {
-		return nil, fmt.Errorf("vault: saving vault file: %w", err)
+	s, err := storage.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("vault: opening storage: %w", err)
+	}
+	if err := s.Init(context.Background(), h); err != nil {
+		return nil, fmt.Errorf("vault: initializing vault: %w", err)
 	}
 
 	v := &Vault{
-		path: path,
-		dek:  dek,
-		file: vf,
+		path:    path,
+		dek:     dek,
+		storage: s,
 	}
 
 	return v, nil

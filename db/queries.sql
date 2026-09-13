@@ -31,12 +31,12 @@ SELECT * FROM entries WHERE id = ? AND deleted = 0;
 -- name: ListEntries :many
 SELECT id, title, modified_at FROM entries WHERE deleted = 0;
 
--- name: UpdateEntry :exec
+-- name: UpdateEntry :execrows
 UPDATE entries
 SET title = ?, ciphertext = ?, modified_at = ?
 WHERE id = ? AND deleted = 0;
 
--- name: SetDeleted :exec
+-- name: SetDeleted :execrows
 UPDATE entries
 SET deleted = 1, modified_at = ?
 WHERE id = ? AND deleted = 0;

@@ -3,7 +3,7 @@
 //   sqlc v1.31.1
 // source: queries.sql
 
-package db
+package repo
 
 import (
 	"context"
@@ -164,7 +164,7 @@ func (q *Queries) ListEntries(ctx context.Context) ([]ListEntriesRow, error) {
 	return items, nil
 }
 
-const setDeleted = `-- name: SetDeleted :exec
+const setDeleted = `-- name: SetDeleted :execrows
 UPDATE entries
 SET deleted = 1, modified_at = ?
 WHERE id = ? AND deleted = 0
@@ -175,12 +175,15 @@ type SetDeletedParams struct {
 	ID         string
 }
 
-func (q *Queries) SetDeleted(ctx context.Context, arg SetDeletedParams) error {
-	_, err := q.db.ExecContext(ctx, setDeleted, arg.ModifiedAt, arg.ID)
-	return err
+func (q *Queries) SetDeleted(ctx context.Context, arg SetDeletedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setDeleted, arg.ModifiedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const updateEntry = `-- name: UpdateEntry :exec
+const updateEntry = `-- name: UpdateEntry :execrows
 UPDATE entries
 SET title = ?, ciphertext = ?, modified_at = ?
 WHERE id = ? AND deleted = 0
@@ -193,12 +196,15 @@ type UpdateEntryParams struct {
 	ID         string
 }
 
-func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) error {
-	_, err := q.db.ExecContext(ctx, updateEntry,
+func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateEntry,
 		arg.Title,
 		arg.Ciphertext,
 		arg.ModifiedAt,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
