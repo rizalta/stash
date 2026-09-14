@@ -16,6 +16,8 @@ const (
 
 type App struct {
 	ctx    context.Context
+	width  int
+	height int
 	screen screen
 	unlock unlockModel
 	list   listModel
@@ -35,8 +37,13 @@ func (am App) Init() tea.Cmd {
 }
 
 func (am App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if opened, ok := msg.(vaultOpenedMsg); ok {
-		am.vault = opened.vault
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		am.width = msg.Width
+		am.height = msg.Height
+
+	case vaultOpenedMsg:
+		am.vault = msg.vault
 		am.list = newListModel(am.ctx, am.vault)
 		am.screen = screenList
 		return am, am.list.Init()
@@ -58,16 +65,22 @@ func (am App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (am App) View() tea.View {
+	content := ""
 	switch am.screen {
 	case screenUnlock:
-		return am.unlock.View()
+		content = am.unlock.View().Content
 	case screenList:
-		return am.list.View()
+		content = am.list.View().Content
 	}
 
-	return tea.NewView("")
+	v := tea.NewView(centredView(am.width, am.height, content))
+	v.AltScreen = true
+	return v
 }
 
 func (am App) Close() error {
-	return am.vault.Close()
+	if am.vault != nil {
+		return am.vault.Close()
+	}
+	return nil
 }

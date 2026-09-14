@@ -20,6 +20,7 @@ type vaultOpenFailedMsg struct {
 
 type unlockModel struct {
 	ctx       context.Context
+	width     int
 	vaultPath string
 	input     textinput.Model
 	errMsg    string
@@ -46,6 +47,11 @@ func (um unlockModel) Init() tea.Cmd {
 func (um unlockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		um.width = msg.Width
+		um.input.SetWidth(min(maxContentWidth, um.width) - 8)
+		return um, nil
+
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
@@ -80,14 +86,17 @@ func (um unlockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (um unlockModel) View() tea.View {
-	content := lipgloss.JoinVertical(lipgloss.Left, "Unlock your Vault", um.input.View())
-	if um.errMsg != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, um.errMsg)
-	}
-	v := tea.NewView(content)
-	v.AltScreen = true
+	title := titleStyle.Render("Unlock your Vault")
+	input := inputBoxStyle.Render(um.input.View())
 
-	return v
+	content := lipgloss.JoinVertical(lipgloss.Left, title, input)
+
+	if um.errMsg != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, errorStyle.Render(um.errMsg))
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, helpStyle.Render("Enter to unlock · ctrl+c to quit"))
+
+	return tea.NewView(content)
 }
 
 func attemptOpen(ctx context.Context, vaultPath string, password []byte) tea.Cmd {
