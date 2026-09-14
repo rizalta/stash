@@ -15,13 +15,16 @@ const (
 )
 
 type App struct {
+	ctx    context.Context
 	screen screen
 	unlock unlockModel
+	list   listModel
 	vault  *vault.Vault
 }
 
 func NewApp(ctx context.Context, vaultPath string) *App {
 	return &App{
+		ctx:    ctx,
 		screen: screenUnlock,
 		unlock: newUnlockModel(ctx, vaultPath),
 	}
@@ -34,7 +37,9 @@ func (am App) Init() tea.Cmd {
 func (am App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if opened, ok := msg.(vaultOpenedMsg); ok {
 		am.vault = opened.vault
+		am.list = newListModel(am.ctx, am.vault)
 		am.screen = screenList
+		return am, am.list.Init()
 	}
 
 	switch am.screen {
@@ -44,7 +49,9 @@ func (am App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return am, cmd
 
 	case screenList:
-		return am, nil
+		m, cmd := am.list.Update(msg)
+		am.list = m.(listModel)
+		return am, cmd
 	}
 
 	return am, nil
@@ -55,8 +62,12 @@ func (am App) View() tea.View {
 	case screenUnlock:
 		return am.unlock.View()
 	case screenList:
-		return tea.NewView("unlocked")
+		return am.list.View()
 	}
 
 	return tea.NewView("")
+}
+
+func (am App) Close() error {
+	return am.vault.Close()
 }

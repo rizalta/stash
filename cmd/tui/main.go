@@ -25,7 +25,11 @@ func main() {
 	defer stop()
 
 	p := tea.NewProgram(ui.NewApp(ctx, vaultPath))
-	if _, err := p.Run(); err != nil {
+	m, err := p.Run()
+	if err != nil {
 		log.Fatalf("error running the program: %v", err)
+	}
+	if am, ok := m.(ui.App); ok {
+		_ = am.Close()
 	}
 }
