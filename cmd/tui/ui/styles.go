@@ -1,8 +1,13 @@
 package ui
 
-import "charm.land/lipgloss/v2"
+import (
+	"charm.land/lipgloss/v2"
+)
 
-const maxContentWidth = 60
+const (
+	maxContentWidth = 60
+	marginWidth     = 4
+)
 
 var (
 	titleStyle = lipgloss.NewStyle().
@@ -24,9 +29,14 @@ var (
 			MarginTop(1)
 )
 
+func contentWidth(width int) int {
+	w := min(maxContentWidth, width-marginWidth)
+	return max(0, w)
+}
+
 func centredView(width, height int, content string) string {
 	box := lipgloss.NewStyle().
-		Width(min(width-4, maxContentWidth)).
+		Width(contentWidth(width)).
 		Render(content)
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)

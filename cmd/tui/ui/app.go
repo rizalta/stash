@@ -65,15 +65,14 @@ func (am App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (am App) View() tea.View {
-	content := ""
+	var v tea.View
 	switch am.screen {
 	case screenUnlock:
-		content = am.unlock.View().Content
+		v = am.unlock.View()
 	case screenList:
-		content = am.list.View().Content
+		v = am.list.View()
 	}
 
-	v := tea.NewView(centredView(am.width, am.height, content))
 	v.AltScreen = true
 	return v
 }
